@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💰 Sistem Keuangan Dinamis - Dashboard</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Firebase & ChartJS -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    
+    <link rel="stylesheet" href="../style.css"> 
+</head>
+<body>
+
+    <header class="app-header">
+        <div class="header-content">
+            <div class="logo-area">
+                <div class="logo-icon"><i class="fa-solid fa-wallet"></i></div>
+                <div>
+                    <h1>Dashboard Keuangan Adit</h1>
+                    <p>Aplikasi Pemasukan dan Pengeluaran Realtime</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button type="button" class="nav-header-btn btn-jadwal" onclick="bukaJadwal()" title="Buka Editor Jadwal">
+                    <i class="fa-solid fa-calendar-days"></i> <span>Editor Jadwal</span>
+                </button>
+                <button type="button" class="nav-header-btn btn-jadwal-publik" onclick="bukaJadwalPublik()" title="Lihat Tampilan Publik Jadwal">
+                    <i class="fa-solid fa-globe"></i> <span>Jadwal Publik</span>
+                </button>
+                <button type="button" class="nav-header-btn btn-hubungi" onclick="bukaHubungi()" title="Hubungi Adit">
+                    <i class="fa-solid fa-headset"></i> <span>Hubungi</span>
+                </button>
+                <div class="header-badge">
+                    <span class="live-indicator"></span> Realtime Active
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="app-container">
+        <!-- Ringkasan Dashboard -->
+        <section id="ringkasan-dashboard" class="glass-card">
+            <div class="section-header flex-header">
+                <h2><i class="fa-solid fa-chart-line"></i> Ringkasan Keuangan</h2>
+                <div id="ringkasan-filter-container">
+                    <label for="filter-periode-ringkasan"><i class="fa-regular fa-calendar"></i> Periode:</label>
+                    <select id="filter-periode-ringkasan" onchange="filterAndRender()"></select>
+                </div>
+            </div>
+            <div class="summary-cards">
+                <div class="card pemasukan">
+                    <div class="card-icon"><i class="fa-solid fa-arrow-down"></i></div>
+                    <div class="card-info">
+                        <h3>Total Pemasukan</h3>
+                        <p id="totalPemasukan">Rp 0</p>
+                    </div>
+                </div>
+                <div class="card pengeluaran">
+                    <div class="card-icon"><i class="fa-solid fa-arrow-up"></i></div>
+                    <div class="card-info">
+                        <h3>Total Pengeluaran</h3>
+                        <p id="totalPengeluaran">Rp 0</p>
+                    </div>
+                </div>
+                <div class="card persentase">
+                    <div class="card-icon"><i class="fa-solid fa-percent"></i></div>
+                    <div class="card-info">
+                        <h3>Pengeluaran Ratio</h3>
+                        <p id="persentasePengeluaran">0.00%</p>
+                        <p id="spending-limit-info"></p> 
+                        <p id="warning-ratio"></p> 
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <div class="dashboard-grid">
+            <!-- Form Transaksi Baru -->
+            <section id="form-transaksi" class="glass-card">
+                <h2><i class="fa-solid fa-wand-magic-sparkles" style="color: #f59e0b;"></i> Auto Input Cepat (Text Parser)</h2>
+                
+                <div class="quick-input-container">
+                    <div class="quick-input-wrapper">
+                        <textarea id="quickInput" rows="2" placeholder="Ketik / Paste transaksi di sini... Contoh:&#10;+arang 15kg cash 225&#10;-pulsa tf dana 15" oninput="handleQuickInput()" onkeydown="handleQuickKey(event)"></textarea>
+                        <button type="button" class="btn-quick-send" onclick="submitQuickInput()" title="Kirim Langsung (Enter)">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    <small class="quick-hint">
+                        💡 <strong>Format:</strong> <code>+</code> (Pemasukan) / <code>-</code> (Pengeluaran), sebutkan akun (cash/bni/dana/gopay/qris), & nominal (cth: 225 = Rp 225rb). Bisa banyak baris sekaligus!
+                    </small>
+
+                    <!-- Preview Hasil Parsing Quick Input -->
+                    <div id="quickPreview" class="quick-preview-card" style="display: none;">
+                        <div class="preview-header">
+                            <i class="fa-solid fa-eye" style="color: var(--warning);"></i> 
+                            <span class="preview-title">Deteksi Otomatis (<span id="quickCount">0</span> Transaksi):</span>
+                        </div>
+                        
+                        <div id="quickPreviewList" class="quick-preview-list">
+                            <!-- Dynamically generated items -->
+                        </div>
+
+                        <button type="button" id="btnQuickSubmit" class="btn-quick-submit" onclick="submitQuickInput()">
+                            <i class="fa-solid fa-bolt"></i> Simpan Transaksi Otomatis
+                        </button>
+                    </div>
+                </div>
+
+                <div class="divider-text"><span>Atau Form Input Manual</span></div>
+
+                <form id="transaksiForm">
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-arrows-left-right"></i> Jenis Transaksi:</label>
+                        <div class="jenis-toggle-group">
+                            <button type="button" class="jenis-btn active-pemasukan" id="formBtnPemasukan" onclick="setJenis('PEMASUKAN', 'form')">
+                                <i class="fa-solid fa-circle-arrow-down"></i> PEMASUKAN
+                            </button>
+                            <button type="button" class="jenis-btn" id="formBtnPengeluaran" onclick="setJenis('PENGELUARAN', 'form')">
+                                <i class="fa-solid fa-circle-arrow-up"></i> PENGELUARAN
+                            </button>
+                            <input type="hidden" id="jenis" value="PEMASUKAN" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label for="tanggal"><i class="fa-regular fa-calendar"></i> Tanggal:</label>
+                            <input type="date" id="tanggal" required>
+                        </div>
+
+                        <div class="form-group flex-1">
+                            <label for="metode"><i class="fa-solid fa-credit-card"></i> Metode Transaksi:</label>
+                            <select id="metode" onchange="toggleSubMetode()" required>
+                                <option value="CASH">Cash</option>
+                                <option value="TF">Transfer Bank</option>
+                                <option value="QRIS">QRIS</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="subMetodeContainer" style="display:none;">
+                        <label for="subMetode"><i class="fa-solid fa-building-columns"></i> Akun Tujuan/Sumber:</label>
+                        <select id="subMetode">
+                            <option value="BNI">BNI</option>
+                            <option value="DANA">DANA</option>
+                            <option value="GOPAY">GOPAY</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="nama"><i class="fa-solid fa-pen-to-square"></i> Keterangan/Keperluan:</label>
+                        <input type="text" id="nama" placeholder="Contoh: Duit Awal / Bayar Listrik" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="nominal"><i class="fa-solid fa-money-bill-wave"></i> Nominal (Rp):</label>
+                        <input type="number" id="nominal" min="1" placeholder="Masukkan jumlah nominal" required>
+                    </div>
+
+                    <button type="submit" class="btn-submit"><i class="fa-solid fa-plus"></i> Tambah Transaksi</button>
+                </form>
+            </section>
+
+            <!-- Grafik & Saldo Stack -->
+            <div class="side-stack">
+                <section id="grafik-section" class="glass-card">
+                    <h2><i class="fa-solid fa-chart-pie"></i> Distribusi Keuangan</h2>
+                    <div id="diagram-lingkaran">
+                        <canvas id="keuanganChart"></canvas>
+                    </div>
+                </section>
+
+                <section id="saldo-section" class="glass-card">
+                    <h2><i class="fa-solid fa-vault"></i> Saldo Akun</h2>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Akun</th>
+                                    <th>Saldo Saat Ini</th>
+                                    <th class="text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="saldoTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- Tabel Data Transaksi -->
+        <section id="data-transaksi" class="glass-card">
+            <div class="section-header flex-header">
+                <h2><i class="fa-solid fa-list-check"></i> Data Transaksi (CRUD)</h2>
+                
+                <div id="search-container">
+                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                    <input type="text" id="searchInput" placeholder="Cari keterangan transaksi..." oninput="filterAndRender()">
+                </div>
+            </div>
+            
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tanggal</th>
+                            <th>Jenis</th>
+                            <th>Metode</th>
+                            <th>Keterangan</th>
+                            <th>Nominal</th>
+                            <th>Terakhir Diperbarui</th>
+                            <th class="text-center">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transaksiTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal Edit Transaksi -->
+    <div id="editModal" class="modal">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="fa-solid fa-pen-to-square"></i> Edit Transaksi</h3>
+                <span class="close-button" onclick="document.getElementById('editModal').style.display='none'">&times;</span>
+            </div>
+            <form id="editForm">
+                <input type="hidden" id="editId">
+
+                <div class="form-group">
+                    <label><i class="fa-solid fa-arrows-left-right"></i> Jenis Transaksi:</label>
+                    <div class="jenis-toggle-group">
+                        <button type="button" class="jenis-btn" id="editBtnPemasukan" onclick="setJenis('PEMASUKAN', 'edit')">
+                            <i class="fa-solid fa-circle-arrow-down"></i> PEMASUKAN
+                        </button>
+                        <button type="button" class="jenis-btn" id="editBtnPengeluaran" onclick="setJenis('PENGELUARAN', 'edit')">
+                            <i class="fa-solid fa-circle-arrow-up"></i> PENGELUARAN
+                        </button>
+                        <input type="hidden" id="editJenis" value="PEMASUKAN" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="editTanggal"><i class="fa-regular fa-calendar"></i> Tanggal:</label>
+                    <input type="date" id="editTanggal" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editMetode"><i class="fa-solid fa-credit-card"></i> Metode Transaksi:</label>
+                    <select id="editMetode" onchange="toggleEditSubMetode(this.value)" required>
+                        <option value="CASH">Cash</option>
+                        <option value="TF">Transfer Bank</option>
+                        <option value="QRIS">QRIS</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="editSubMetodeContainer" style="display:none;">
+                    <label for="editSubMetode"><i class="fa-solid fa-building-columns"></i> Akun Tujuan/Sumber:</label>
+                    <select id="editSubMetode">
+                        <option value="BNI">BNI</option>
+                        <option value="DANA">DANA</option>
+                        <option value="GOPAY">GOPAY</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="editNama"><i class="fa-solid fa-pen-to-square"></i> Keterangan/Keperluan:</label>
+                    <input type="text" id="editNama" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="editNominal"><i class="fa-solid fa-money-bill-wave"></i> Nominal (Rp):</label>
+                    <input type="number" id="editNominal" min="1" required>
+                </div>
+
+                <button type="submit" class="btn-submit"><i class="fa-solid fa-floppy-disk"></i> Simpan Perubahan</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Hubungi / Kontak -->
+    <div id="hubungiModal" class="modal">
+        <div class="modal-content glass-card contact-modal-box">
+            <div class="modal-header">
+                <div class="contact-header-badge">
+                    <i class="fa-solid fa-paper-plane"></i> Layanan Kontak Resmi
+                </div>
+                <h3 class="modal-title">Hubungi Adit</h3>
+                <span class="close-button" onclick="tutupHubungi()">&times;</span>
+            </div>
+            <div class="contact-body">
+                <p class="contact-desc">Silakan hubungi Adit melalui WhatsApp atau Gmail di bawah ini untuk konsultasi jadwal atau diskusi:</p>
+                
+                <div class="contact-card-list">
+                    <!-- WhatsApp Card -->
+                    <a href="https://wa.me/6281234567890?text=halo%20adit%2Csaya%20ingin%20meminta%20waktu%20free%20anda%20kapan%20kamu%20free" target="_blank" class="pro-contact-card wa-card">
+                        <div class="pro-card-icon wa-icon">
+                            <i class="fa-brands fa-whatsapp fa-xl"></i>
+                        </div>
+                        <div class="pro-card-content">
+                            <div class="pro-card-title-row">
+                                <span class="pro-card-title">WhatsApp Direct</span>
+                                <span class="pro-card-badge wa-pill">Respon Cepat</span>
+                            </div>
+                            <p class="pro-card-desc">Format pesan otomatis:</p>
+                            <div class="pro-card-msg-quote">
+                                "halo adit,saya ingin meminta waktu free anda kapa kmu free"
+                            </div>
+                        </div>
+                        <div class="pro-card-action">
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </div>
+                    </a>
+
+                    <!-- Gmail Card -->
+                    <a href="mailto:achmadfurqon33@gmail.com?subject=Permintaan%20Waktu%20Luang%20%2F%20Diskusi%20Jadwal&body=halo%20adit%2Csaya%20ingin%20meminta%20waktu%20free%20anda%20kapan%20kamu%20free" class="pro-contact-card gmail-card">
+                        <div class="pro-card-icon gmail-icon">
+                            <i class="fa-solid fa-envelope fa-xl"></i>
+                        </div>
+                        <div class="pro-card-content">
+                            <div class="pro-card-title-row">
+                                <span class="pro-card-title">Gmail Direct</span>
+                                <span class="pro-card-badge gmail-pill">Email Resmi</span>
+                            </div>
+                            <p class="pro-card-email-address"><i class="fa-regular fa-envelope"></i> achmadfurqon33@gmail.com</p>
+                            <p class="pro-card-desc">Kirim email langsung untuk diskusi formal.</p>
+                        </div>
+                        <div class="pro-card-action">
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../script.js"></script>
+
+</body>
+</html>
