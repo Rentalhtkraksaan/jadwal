@@ -721,9 +721,7 @@
                 <span id="visitorBadgeText" style="background: rgba(255,255,255,0.15); color: white; padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1px solid rgba(255,255,255,0.25); display: inline-flex; align-items: center; gap: 6px;">
                     <i class="fa-solid fa-user-tag" style="color: #60a5fa;"></i> <span id="visitorNameDisplay">Tamu Anonim</span>
                 </span>
-                <button type="button" onclick="bukaGuestbookModal(true)" style="background: rgba(59, 130, 246, 0.25); border: 1px solid rgba(147, 197, 253, 0.4); color: #93c5fd; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s;" onhover="this.style.background='rgba(59, 130, 246, 0.4)'">
-                    <i class="fa-solid fa-pen-to-square"></i> Ubah Nama
-                </button>
+                <div id="editNameBtnWrapper"></div>
             </div>
         </div>
 
@@ -1228,12 +1226,35 @@
         document.getElementById('hubungiModal').style.display = 'none';
     }
 
-    // GUESTBOOK / DAFTAR TAMU LOGIC
+    // GUESTBOOK / DAFTAR TAMU LOGIC (MAX 2X EDIT)
+    function getGuestEditCount() {
+        return parseInt(localStorage.getItem("guest_name_edit_count") || "0");
+    }
+
     function updateVisitorDisplay() {
         const name = window.SystemLogger ? window.SystemLogger.getVisitorName() : localStorage.getItem("guest_name");
         const displayEl = document.getElementById("visitorNameDisplay");
         if (displayEl) {
             displayEl.textContent = name ? name : "Tamu Anonim";
+        }
+
+        const editCount = getGuestEditCount();
+        const wrapper = document.getElementById("editNameBtnWrapper");
+        if (wrapper) {
+            if (editCount >= 2) {
+                wrapper.innerHTML = `
+                    <span style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(248, 113, 113, 0.4); color: #fca5a5; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;" title="Nama permanen (Batas 2x edit tercapai)">
+                        <i class="fa-solid fa-lock"></i> Nama Permanen
+                    </span>
+                `;
+            } else {
+                const sisa = 2 - editCount;
+                wrapper.innerHTML = `
+                    <button type="button" onclick="bukaGuestbookModal(true)" style="background: rgba(59, 130, 246, 0.25); border: 1px solid rgba(147, 197, 253, 0.4); color: #93c5fd; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s;">
+                        <i class="fa-solid fa-pen-to-square"></i> Ubah Nama (${sisa}x sisa)
+                    </button>
+                `;
+            }
         }
     }
 
@@ -1241,9 +1262,26 @@
         const modal = document.getElementById("guestbookModal");
         if (!modal) return;
         const name = window.SystemLogger ? window.SystemLogger.getVisitorName() : localStorage.getItem("guest_name");
-        if (!name || force) {
+        const editCount = getGuestEditCount();
+
+        if (editCount >= 2 && force) {
+            alert("🔒 Maaf, Anda telah mencapai batas maksimal 2x pengubahan nama. Nama Anda telah PERMANEN.");
+            return;
+        }
+
+        if (!name || (force && editCount < 2)) {
             const input = document.getElementById("guestNameInput");
             if (input && name) input.value = name;
+
+            const hintEl = document.getElementById("guestEditLimitHint");
+            if (hintEl) {
+                if (editCount === 0) {
+                    hintEl.innerHTML = `<span style="color: #059669; font-weight: 700;"><i class="fa-solid fa-circle-info"></i> Kesempatan edit nama: 2x tersisa</span>`;
+                } else if (editCount === 1) {
+                    hintEl.innerHTML = `<span style="color: #d97706; font-weight: 700;"><i class="fa-solid fa-triangle-exclamation"></i> Pengubahan Terakhir (1/2 kali digunakan)! Setelah ini nama akan PERMANEN.</span>`;
+                }
+            }
+
             modal.style.display = "block";
         }
     }
@@ -1255,6 +1293,13 @@
 
     function simpanNamaTamu(e) {
         if (e) e.preventDefault();
+        const editCount = getGuestEditCount();
+        if (editCount >= 2) {
+            alert("🔒 Batas maksimal 2x pengubahan nama telah tercapai!");
+            tutupGuestbookModal();
+            return;
+        }
+
         const input = document.getElementById("guestNameInput");
         const name = input ? input.value.trim() : "";
         if (name) {
@@ -1263,8 +1308,19 @@
             } else {
                 localStorage.setItem("guest_name", name);
             }
+
+            // Tambah hitungan edit
+            const newCount = editCount + 1;
+            localStorage.setItem("guest_name_edit_count", newCount.toString());
+
             updateVisitorDisplay();
             tutupGuestbookModal();
+
+            if (newCount >= 2) {
+                alert("🔒 Nama berhasil disimpan! Pengubahan nama telah mencapai batas 2x dan sekarang PERMANEN.");
+            } else {
+                alert(`✅ Nama berhasil disimpan! Sisa kesempatan ubah nama: ${2 - newCount}x.`);
+            }
         }
     }
 
@@ -1333,9 +1389,10 @@
             <div style="margin-bottom: 18px;">
                 <label style="display: block; font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Nama Lengkap / Panggilan:</label>
                 <input type="text" id="guestNameInput" placeholder="Contoh: Adit, Budi, atau Sarah" required style="width: 100%; padding: 12px 14px; border: 1.5px solid #cbd5e1; border-radius: 10px; font-size: 14px; font-weight: 600; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#cbd5e1'">
+                <div id="guestEditLimitHint" style="font-size: 11px; margin-top: 6px;"></div>
             </div>
             <div style="display: flex; gap: 10px;">
-                <button type="submit" style="flex: 2; background: #2563eb; color: white; border: none; padding: 12px; border-radius: 10px; font-weight: 700; font-size: 14px; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <button type="submit" style="flex: 2; background: #2563eb; color: white; border: none; padding: 12px; border-radius: 10px; font-weight: 700; font-size: 14px; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: justify-content; gap: 6px; justify-content: center;">
                     <i class="fa-solid fa-check"></i> Simpan & Lanjutkan
                 </button>
                 <button type="button" onclick="tutupGuestbookModal()" style="flex: 1; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; padding: 12px; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer;">
