@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📋 Access & Audit Log Admin - Portal System</title>
+    
+    <!-- Auth Security Guard -->
+    <script>
+        function checkAuth() {
+            if (sessionStorage.getItem("ditfur_auth") !== "true") {
+                let id = prompt("🔐 Masukkan ID Pengguna (Angka):");
+                let pw = prompt("🔑 Masukkan Kata Sandi (Password):");
+                if (id === "24214160905" && pw === "16090524214") {
+                    sessionStorage.setItem("ditfur_auth", "true");
+                } else {
+                    alert("❌ Login Gagal! ID atau Password salah.");
+                    window.location.href = "index.html";
+                }
+            }
+        }
+        checkAuth();
+
+        function logout() {
+            if (confirm("Apakah Anda yakin ingin keluar dari Sesi Admin?")) {
+                sessionStorage.removeItem("ditfur_auth");
+                window.location.href = "index.html";
+            }
+        }
+    </script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Firebase SDK compat -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        .admin-container {
+            max-width: 1150px;
+            margin: 30px auto;
+            padding: 0 16px;
+        }
+
+        .log-table-card {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.08);
+            border: 1px solid #e2e8f0;
+            margin-top: 20px;
+        }
+
+        .log-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .badge-ip { background: #dbeafe; color: #1e40af; }
+        .badge-device { background: #f3e8ff; color: #6b21a8; }
+        .badge-battery { background: #dcfce7; color: #15803d; }
+        .badge-page { background: #fef3c7; color: #b45309; }
+        .badge-action { background: #e0e7ff; color: #3730a3; font-weight: 700; border: 1px solid #c7d2fe; }
+
+        .name-tag {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: white;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+        }
+
+        .name-tag.custom-admin-private {
+            background: linear-gradient(135deg, #475569 0%, #334155 100%);
+            box-shadow: 0 2px 4px rgba(71, 85, 105, 0.2);
+        }
+
+        .name-tag.custom-admin-public {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            box-shadow: 0 2px 4px rgba(5, 150, 105, 0.2);
+        }
+
+        .name-tag.auto-device {
+            background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+            box-shadow: 0 2px 4px rgba(51, 65, 85, 0.15);
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+            margin-top: 16px;
+        }
+
+        table.log-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        table.log-table th, table.log-table td {
+            padding: 12px 14px;
+            text-align: left;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+        table.log-table th {
+            background: #f8fafc;
+            color: #475569;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 11px;
+        }
+
+        table.log-table tr:hover {
+            background: #f8fafc;
+        }
+
+        .user-agent-text {
+            font-size: 11px;
+            color: #64748b;
+            max-width: 220px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .btn-danger-sm {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-danger-sm:hover {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-edit-device {
+            background: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .btn-edit-device:hover {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+
+        .search-log-bar {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 10px;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+            margin-top: 12px;
+        }
+
+        .search-log-bar:focus {
+            border-color: #6366f1;
+        }
+
+        /* MODAL STYLES */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content.contact-modal-box {
+            background-color: #ffffff;
+            margin: 6% auto;
+            padding: 26px 24px;
+            border-radius: 16px;
+            width: 92%;
+            max-width: 480px;
+            box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+            position: relative;
+            border: 1px solid #f1f5f9;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 18px;
+            right: 18px;
+            font-size: 22px;
+            color: #94a3b8;
+            cursor: pointer;
+        }
+        .close-modal:hover { color: #0f172a; }
+    </style>
+</head>
+<body>
+
+    <header class="app-header">
+        <div class="header-content">
+            <div class="logo-area">
+                <div class="logo-icon" style="background: #6366f1;"><i class="fa-solid fa-user-shield"></i></div>
+                <div>
+                    <h1>Portal Admin & Log Akses System</h1>
+                    <p>Mencatat Waktu, Perangkat Unik HP/Laptop, IP Address, Nama Tamu, & Aktivitas View</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button type="button" class="nav-header-btn" onclick="window.location.href='index.html'" style="background: #475569; color: white;">
+                    <i class="fa-solid fa-globe"></i> <span>Tampilan View</span>
+                </button>
+                <button type="button" class="nav-header-btn" onclick="window.location.href='money.html'" style="background: #2563eb; color: white;">
+                    <i class="fa-solid fa-wallet"></i> <span>Dashboard Keuangan</span>
+                </button>
+                <button type="button" class="nav-header-btn" onclick="window.location.href='jadwal.html'" style="background: #059669; color: white;">
+                    <i class="fa-solid fa-calendar-days"></i> <span>Editor Jadwal</span>
+                </button>
+                <button type="button" class="nav-header-btn" onclick="logout()" style="background: #ef4444; color: white;">
+                    <i class="fa-solid fa-right-from-bracket"></i> <span>Logout</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="admin-container">
+        <!-- Summary Cards -->
+        <div class="summary-cards" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+            <div class="card pemasukan" style="border-left-color: #6366f1;">
+                <div class="card-icon" style="background: #e0e7ff; color: #4338ca;"><i class="fa-solid fa-database"></i></div>
+                <div class="card-info">
+                    <h3>Total Log Akses</h3>
+                    <p id="statTotalLog">0 Entri</p>
+                </div>
+            </div>
+            <div class="card pengeluaran" style="border-left-color: #06b6d4;">
+                <div class="card-icon" style="background: #cffafe; color: #0891b2;"><i class="fa-solid fa-mobile-screen"></i></div>
+                <div class="card-info">
+                    <h3>Perangkat Terakhir</h3>
+                    <p id="statLastIp" style="font-size: 0.95rem;">-</p>
+                </div>
+            </div>
+            <div class="card persentase" style="border-left-color: #10b981;">
+                <div class="card-icon" style="background: #dcfce7; color: #15803d;"><i class="fa-solid fa-clock"></i></div>
+                <div class="card-info">
+                    <h3>Aktivitas Terakhir</h3>
+                    <p id="statLastTime" style="font-size: 0.9rem;">-</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log Table Card -->
+        <div class="log-table-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <h2><i class="fa-solid fa-list-ul" style="color: #6366f1;"></i> Activity Stream & Multi-Perangkat Identitas</h2>
+                    <p style="font-size: 12px; color: #64748b; margin-top: 2px;">Laptop, HP kamu, HP teman, atau perangkat baru otomatis terbaca dengan <strong>Kode Unik Perangkat Berbeda</strong> (misal: #A8F2).</p>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-danger-sm" onclick="clearLogs()"><i class="fa-solid fa-trash-can"></i> Bersihkan Log</button>
+                    <button class="nav-header-btn" onclick="refreshData()" style="background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1;"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                </div>
+            </div>
+
+            <!-- SEARCH FILTER BAR -->
+            <input type="text" id="searchLogInput" class="search-log-bar" placeholder="🔍 Cari log berdasarkan Perangkat (#A8F2), Nama, IP Address, atau Aktivitas..." onkeyup="renderLogTable()">
+
+            <div class="table-responsive">
+                <table class="log-table">
+                    <thead>
+                        <tr>
+                            <th>Waktu & Tanggal</th>
+                            <th>Identitas Perangkat Unik</th>
+                            <th>Aktivitas di View</th>
+                            <th>Detail Perangkat & OS</th>
+                            <th>Baterai</th>
+                            <th>Aksi Admin</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logTableBody">
+                        <tr>
+                            <td colspan="6" style="text-align: center; color: #94a3b8; padding: 20px;">Memuat data log aktivitas...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL EDIT NAMA PERANGKAT ADMIN (2 OPSI TAMPILAN) -->
+    <div id="adminEditModal" class="modal">
+        <div class="modal-content contact-modal-box">
+            <span class="close-modal" onclick="tutupAdminEditModal()">&times;</span>
+            <div style="margin-bottom: 16px;">
+                <span class="log-badge badge-action" style="background: #e0e7ff; color: #3730a3; padding: 4px 10px; border-radius: 12px; font-size: 11px;">
+                    <i class="fa-solid fa-user-gear"></i> Kelola Nama Perangkat
+                </span>
+                <h3 style="font-size: 18px; font-weight: 800; color: #0f172a; margin-top: 8px;">Edit Nama Perangkat Admin</h3>
+                <p id="adminEditModalSub" style="font-size: 12px; color: #64748b; margin-top: 4px;">Perangkat: -</p>
+            </div>
+
+            <form id="adminEditForm" onsubmit="simpanAdminEditDevice(event)">
+                <input type="hidden" id="editModalDeviceId">
+                <input type="hidden" id="editModalIp">
+
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px; text-transform: uppercase;">Nama / Alias Baru:</label>
+                    <input type="text" id="editModalNameInput" placeholder="Contoh: Adit - HP Oppo, Laptop Adit" style="width: 100%; padding: 10px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-weight: 600; outline: none;">
+                </div>
+
+                <div style="margin-bottom: 20px; background: #f8fafc; padding: 14px; border-radius: 10px; border: 1px solid #e2e8f0;">
+                    <label style="display: block; font-size: 12px; font-weight: 700; color: #1e293b; margin-bottom: 10px;">Pilih Opsi Tampilan Nama:</label>
+                    
+                    <label style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; cursor: pointer;">
+                        <input type="radio" name="syncOption" value="private" id="optPrivate" checked style="margin-top: 3px;">
+                        <div>
+                            <strong style="font-size: 13px; color: #334155;">🔒 Opsi 1: Hanya Tampilkan di Admin (Privat Admin)</strong>
+                            <p style="font-size: 11px; color: #64748b; margin-top: 2px;">Nama baru HANYA terlihat di Portal Admin. Header di HP/Laptop user (index.html) TIDAK berubah.</p>
+                        </div>
+                    </label>
+
+                    <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+                        <input type="radio" name="syncOption" value="public" id="optPublic" style="margin-top: 3px;">
+                        <div>
+                            <strong style="font-size: 13px; color: #059669;">🌐 Opsi 2: Sinkronkan & Tampilkan ke User (Publik)</strong>
+                            <p style="font-size: 11px; color: #64748b; margin-top: 2px;">Nama baru ini akan LANGSUNG BERUBAH & SINKRON di header pengguna (index.html) secara realtime!</p>
+                        </div>
+                    </label>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" style="flex: 2; background: #2563eb; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer;">
+                        <i class="fa-solid fa-check"></i> Simpan Perubahan
+                    </button>
+                    <button type="button" onclick="tutupAdminEditModal()" style="flex: 1; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer;">
+                        Batal
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Script Logger API Global -->
+    <script src="logger.js"></script>
+
+    <!-- Firebase Init & Log Reader Script -->
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBiNwS8pU3D6iF5gTmM95kzMIy-tm_sTIY",
+            authDomain: "rentalhtkraksaan-61397.firebaseapp.com",
+            databaseURL: "https://rentalhtkraksaan-61397-default-rtdb.firebaseio.com",
+            projectId: "rentalhtkraksaan-61397",
+            storageBucket: "rentalhtkraksaan-61397.appspot.com",
+            messagingSenderId: "665290802617",
+            appId: "1:665290802617:web:efb004f474218e443fa268"
+        };
+
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = app.database();
+        const auth = app.auth();
+        const logsRef = db.ref('keuangan/access_logs');
+        const deviceAliasesRef = db.ref('keuangan/device_aliases');
+
+        let cachedLogs = [];
+        let cachedDeviceAliases = {};
+
+        auth.signInAnonymously().then(() => {
+            listenFirebaseData();
+        }).catch(err => {
+            console.error("Firebase Login Error:", err);
+            loadLocalFallback();
+        });
+
+        function listenFirebaseData() {
+            // Listen Device Aliases Realtime
+            deviceAliasesRef.on('value', (snapshot) => {
+                cachedDeviceAliases = snapshot.val() || {};
+                renderLogTable();
+            });
+
+            // Listen Access Logs Realtime
+            logsRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    cachedLogs = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+                    cachedLogs.reverse(); // Terbaru di atas
+                } else {
+                    cachedLogs = [];
+                }
+                renderLogTable();
+            });
+        }
+
+        function refreshData() {
+            renderLogTable();
+        }
+
+        function renderLogTable() {
+            const tbody = document.getElementById("logTableBody");
+            const query = (document.getElementById("searchLogInput").value || "").toLowerCase().trim();
+            tbody.innerHTML = "";
+
+            if (!cachedLogs || cachedLogs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #94a3b8; padding: 20px;">Belum ada log akses tercatat.</td></tr>`;
+                document.getElementById("statTotalLog").textContent = "0 Entri";
+                document.getElementById("statLastIp").textContent = "-";
+                document.getElementById("statLastTime").textContent = "-";
+                return;
+            }
+
+            // Filter data
+            let filtered = cachedLogs.filter(item => {
+                if (!query) return true;
+                const devAlias = cachedDeviceAliases[item.deviceId] ? cachedDeviceAliases[item.deviceId].name : "";
+                const searchStr = `${item.timestamp || ''} ${item.ip || ''} ${item.deviceId || ''} ${item.visitorName || ''} ${devAlias} ${item.action || ''} ${item.deviceInfo || ''}`.toLowerCase();
+                return searchStr.includes(query);
+            });
+
+            document.getElementById("statTotalLog").textContent = `${cachedLogs.length} Entri`;
+            if (cachedLogs.length > 0) {
+                const top = cachedLogs[0];
+                const topDevAlias = cachedDeviceAliases[top.deviceId] ? cachedDeviceAliases[top.deviceId].name : null;
+                const topName = topDevAlias || top.visitorName || top.deviceInfo || top.ip;
+                document.getElementById("statLastIp").textContent = topName || "-";
+                document.getElementById("statLastTime").textContent = top.timestamp || "-";
+            }
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #94a3b8; padding: 20px;">Tidak ada log yang cocok dengan pencarian.</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(item => {
+                const row = document.createElement("tr");
+                const devId = item.deviceId || "unknown_dev";
+                const devAliasObj = cachedDeviceAliases[devId];
+
+                let nameDisplayHtml = "";
+                let currentName = "";
+                let isSyncedToUser = false;
+
+                if (devAliasObj && devAliasObj.name) {
+                    currentName = devAliasObj.name;
+                    isSyncedToUser = !!devAliasObj.syncToUser;
+                    if (isSyncedToUser) {
+                        nameDisplayHtml = `<span class="name-tag custom-admin-public" title="Nama ini disinkronkan ke HP/User"><i class="fa-solid fa-globe"></i> ${devAliasObj.name} (Publik)</span>`;
+                    } else {
+                        nameDisplayHtml = `<span class="name-tag custom-admin-private" title="Nama ini privat khusus tampilan Admin"><i class="fa-solid fa-lock"></i> ${devAliasObj.name} (Privat Admin)</span>`;
+                    }
+                } else if (item.visitorName) {
+                    currentName = item.visitorName;
+                    nameDisplayHtml = `<span class="name-tag"><i class="fa-solid fa-user"></i> ${item.visitorName}</span>`;
+                } else {
+                    const devInfo = item.deviceInfo || "Perangkat Unik";
+                    nameDisplayHtml = `<span class="name-tag auto-device"><i class="fa-solid fa-laptop-code"></i> ${devInfo}</span>`;
+                }
+
+                const actionText = item.action || `Membuka halaman ${item.page || 'index.html'}`;
+
+                row.innerHTML = `
+                    <td><strong>${item.timestamp || '-'}</strong></td>
+                    <td>
+                        <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+                            ${nameDisplayHtml}
+                            <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                <span class="log-badge badge-ip"><i class="fa-solid fa-network-wired"></i> ${item.ip || 'Unknown IP'}</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="log-badge badge-action"><i class="fa-solid fa-bolt"></i> ${actionText}</span>
+                    </td>
+                    <td>
+                        <span class="log-badge badge-device"><i class="fa-solid fa-mobile-screen-button"></i> ${item.deviceInfo || 'Unknown Device'}</span>
+                        <div class="user-agent-text" title="${item.userAgent || ''}">${item.userAgent || ''}</div>
+                    </td>
+                    <td><span class="log-badge badge-battery"><i class="fa-solid fa-battery-three-quarters"></i> ${item.battery || 'N/A'}</span></td>
+                    <td>
+                        <button class="btn-edit-device" onclick="bukaAdminEditModal('${devId}', '${(item.ip || '').replace(/'/g, "\\'")}', '${(item.deviceInfo || '').replace(/'/g, "\\'")}', '${currentName.replace(/'/g, "\\'")}', ${isSyncedToUser})">
+                            <i class="fa-solid fa-pen-to-square"></i> Edit Nama Perangkat
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // MODAL HANDLERS
+        function bukaAdminEditModal(deviceId, ip, deviceInfo, currentName, isSynced) {
+            document.getElementById("editModalDeviceId").value = deviceId;
+            document.getElementById("editModalIp").value = ip;
+            document.getElementById("editModalNameInput").value = currentName || "";
+            document.getElementById("adminEditModalSub").textContent = `📱 Perangkat: ${deviceInfo} | 🌐 IP: ${ip}`;
+            
+            if (isSynced) {
+                document.getElementById("optPublic").checked = true;
+            } else {
+                document.getElementById("optPrivate").checked = true;
+            }
+
+            document.getElementById("adminEditModal").style.display = "block";
+        }
+
+        function tutupAdminEditModal() {
+            document.getElementById("adminEditModal").style.display = "none";
+        }
+
+        function simpanAdminEditDevice(e) {
+            if (e) e.preventDefault();
+            const deviceId = document.getElementById("editModalDeviceId").value;
+            const ip = document.getElementById("editModalIp").value;
+            const name = document.getElementById("editModalNameInput").value.trim();
+            const isPublicSync = document.getElementById("optPublic").checked;
+
+            if (window.SystemLogger) {
+                window.SystemLogger.setAdminDeviceAlias(deviceId, name, ip, isPublicSync, function() {
+                    tutupAdminEditModal();
+                    if (isPublicSync) {
+                        alert(`✅ Nama Perangkat berhasil diubah & DISINKRONKAN ke User: "${name || 'Default'}"!`);
+                    } else {
+                        alert(`✅ Nama Perangkat berhasil disimpan untuk KHUSUS ADMIN: "${name || 'Default'}"!`);
+                    }
+                });
+            } else {
+                if (name) {
+                    deviceAliasesRef.child(deviceId).set({ deviceId: deviceId, ip: ip, name: name, syncToUser: isPublicSync, updatedAt: new Date().toISOString(), updatedBy: "Admin" });
+                } else {
+                    deviceAliasesRef.child(deviceId).remove();
+                }
+                tutupAdminEditModal();
+                alert("✅ Berhasil memperbarui nama perangkat!");
+            }
+        }
+
+        function loadLocalFallback() {
+            const localLogs = JSON.parse(localStorage.getItem("system_access_logs") || "[]");
+            const localDevAliases = JSON.parse(localStorage.getItem("system_device_aliases") || "{}");
+            cachedLogs = localLogs.reverse();
+            cachedDeviceAliases = localDevAliases;
+            renderLogTable();
+        }
+
+        function clearLogs() {
+            if (confirm("Apakah Anda yakin ingin menghapus seluruh riwayat log akses?")) {
+                logsRef.remove().then(() => {
+                    localStorage.removeItem("system_access_logs");
+                    cachedLogs = [];
+                    renderLogTable();
+                    alert("✅ Seluruh log akses berhasil dibersihkan!");
+                });
+            }
+        }
+    </script>
+</body>
+</html>
